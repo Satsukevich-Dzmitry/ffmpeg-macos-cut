@@ -1,0 +1,30 @@
+{
+  "name": "ffmpeg-macos-cut",
+  "version": "1.0.0",
+  "description": "Cut a clip from a video between two timestamps using ffmpeg",
+  "main": "main.js",
+  "author": "Dzmitry Satsukevich",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac dmg --arm64 --publish never"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.dimamoving.ffmpegcut",
+    "productName": "Video Cutter",
+    "asarUnpack": ["node_modules/ffmpeg-static/ffmpeg"],
+    "files": ["main.js", "preload.js", "index.html", "package.json"],
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["arm64"] }],
+      "category": "public.app-category.video"
+    },
+    "dmg": { "title": "Video Cutter" }
+  }
+}
