@@ -10,12 +10,12 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-14   # Apple Silicon runner
+    runs-on: macos-latest   # Apple Silicon runner
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: npm install
       - run: npm run dist
       - uses: actions/upload-artifact@v4
