@@ -7,16 +7,23 @@
   :root { color-scheme: light dark; }
   body { font: 14px -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 20px; }
   h1 { font-size: 16px; margin: 0 0 14px; }
+  .tabs { display: flex; gap: 0; margin-bottom: 16px; border: 1px solid #888; border-radius: 8px; overflow: hidden; }
+  .tabs button { flex: 1; border: 0; border-radius: 0; background: transparent; padding: 8px; }
+  .tabs button + button { border-left: 1px solid #888; }
+  .tabs button.active { background: #0a84ff; color: #fff; font-weight: 600; }
+  .tabs button:disabled { cursor: default; }
+  .panel { display: none; } .panel.active { display: block; }
   #drop { border: 2px dashed #888; border-radius: 12px; padding: 28px 12px; text-align: center; cursor: pointer; margin-bottom: 16px; word-break: break-all; }
   #drop.over { border-color: #0a84ff; background: rgba(10,132,255,.1); }
   label { display: block; font-weight: 600; margin: 12px 0 4px; }
   .row { display: flex; gap: 8px; align-items: center; }
   input[type=text] { flex: 1; padding: 7px 9px; font-size: 14px; border-radius: 6px; border: 1px solid #888; }
+  #url { width: 100%; box-sizing: border-box; }
   button { padding: 7px 14px; font-size: 14px; border-radius: 6px; border: 1px solid #888; cursor: pointer; }
   #go { width: 100%; margin-top: 18px; padding: 10px; background: #0a84ff; color: #fff; border: 0; font-weight: 600; }
   #go:disabled { opacity: .5; cursor: default; }
   .times { display: flex; gap: 12px; } .times > div { flex: 1; }
-  .mode { margin-top: 12px; } .mode label { display: block; font-weight: 400; margin: 4px 0; }
+  .mode { margin-top: 12px; } .mode label, .quality label { display: block; font-weight: 400; margin: 4px 0; }
   .hint { color: #888; font-size: 12px; margin-top: 2px; }
   progress { width: 100%; margin-top: 14px; display: none; }
   #status { margin-top: 12px; white-space: pre-wrap; }
@@ -26,7 +33,26 @@
 </head>
 <body>
 <h1>Video Cutter</h1>
-<div id="drop">Drop a video here<br><span class="hint">or click to choose a file</span></div>
+
+<div class="tabs">
+  <button id="tab-file" class="active">File</button>
+  <button id="tab-url">Link</button>
+</div>
+
+<div class="panel active" id="panel-file">
+  <div id="drop">Drop a video here<br><span class="hint">or click to choose a file</span></div>
+</div>
+
+<div class="panel" id="panel-url">
+  <label>Video link</label>
+  <input type="text" id="url" placeholder="https://www.youtube.com/watch?v=…">
+  <div class="quality">
+    <label><input type="radio" name="quality" value="edit" checked> For editing – H.264/AAC MP4, up to 1080p (opens in DaVinci Resolve)</label>
+    <label><input type="radio" name="quality" value="best"> Best quality – up to 4K, VP9/AV1 in MKV</label>
+    <label><input type="radio" name="quality" value="audio"> Audio only – M4A</label>
+  </div>
+  <div class="hint"><span id="ytver">yt-dlp: …</span> · <a id="upd">Update yt-dlp</a></div>
+</div>
 
 <label>Output folder</label>
 <div class="row"><input type="text" id="outDir" readonly placeholder="Choose a folder…"><button id="pick">Choose…</button></div>
@@ -35,7 +61,7 @@
   <div><label>Start</label><input type="text" id="start" value="00:00:00"></div>
   <div><label>End</label><input type="text" id="end" placeholder="00:00:30"></div>
 </div>
-<div class="hint">Format: HH:MM:SS, MM:SS or seconds (decimals allowed)</div>
+<div class="hint" id="timeHint">Format: HH:MM:SS, MM:SS or seconds (decimals allowed)</div>
 
 <div class="mode">
   <label><input type="radio" name="mode" value="fast" checked> Fast – no re-encode, original quality (start snaps to nearest earlier keyframe)</label>
@@ -49,6 +75,44 @@
 <script>
 const $ = (id) => document.getElementById(id);
 let input = null;
+let tab = 'file';
+let busy = false;
+
+const HINT_FILE = 'Format: HH:MM:SS, MM:SS or seconds (decimals allowed)';
+const HINT_URL = 'Format: HH:MM:SS, MM:SS or seconds. Leave End empty (and Start at 0) to download the whole video.';
+
+function setTab(t) {
+  if (busy) return;
+  tab = t;
+  $('tab-file').classList.toggle('active', t === 'file');
+  $('tab-url').classList.toggle('active', t === 'url');
+  $('panel-file').classList.toggle('active', t === 'file');
+  $('panel-url').classList.toggle('active', t === 'url');
+  $('go').textContent = t === 'file' ? 'Cut' : 'Download';
+  $('timeHint').textContent = t === 'file' ? HINT_FILE : HINT_URL;
+  $('status').textContent = '';
+  if (t === 'url') {
+    if (!$('outDir').value) api.defaultDir().then((d) => { if (!$('outDir').value) $('outDir').value = d; });
+    refreshVersion();
+  }
+}
+$('tab-file').addEventListener('click', () => setTab('file'));
+$('tab-url').addEventListener('click', () => setTab('url'));
+
+async function refreshVersion() {
+  const v = await api.ytdlpVersion();
+  $('ytver').textContent = v ? `yt-dlp ${v}` : 'yt-dlp: not available';
+}
+
+$('upd').addEventListener('click', async () => {
+  if (busy) return;
+  const status = $('status');
+  status.className = ''; status.textContent = 'Updating yt-dlp…';
+  const r = await api.ytdlpUpdate();
+  status.className = r.ok ? 'ok' : 'err';
+  status.textContent = r.message;
+  refreshVersion();
+});
 
 function setInput(p) {
   input = p;
@@ -71,26 +135,35 @@ window.addEventListener('drop', (e) => e.preventDefault());
 
 $('pick').addEventListener('click', async () => { const p = await api.chooseFolder(); if (p) $('outDir').value = p; });
 
-api.onProgress((v) => { $('bar').value = v; });
+api.onProgress((v) => {
+  // v < 0 means "size unknown": show an indeterminate bar
+  if (v < 0) $('bar').removeAttribute('value');
+  else $('bar').value = v;
+});
 
-let busy = false;
 $('go').addEventListener('click', async () => {
   if (busy) return api.cancel();
   const status = $('status');
-  if (!input) { status.className = 'err'; status.textContent = 'Drop a video first.'; return; }
+  if (tab === 'file' && !input) { status.className = 'err'; status.textContent = 'Drop a video first.'; return; }
+  if (tab === 'url' && !$('url').value.trim()) { status.className = 'err'; status.textContent = 'Paste a video link first.'; return; }
   busy = true;
+  $('tab-file').disabled = $('tab-url').disabled = true;
   $('go').textContent = 'Cancel';
   $('bar').style.display = 'block'; $('bar').value = 0;
-  status.className = ''; status.textContent = 'Cutting…';
-  const res = await api.cut({
-    input,
+  status.className = '';
+  status.textContent = tab === 'file' ? 'Cutting…' : 'Downloading… (the first run of yt-dlp can take a few seconds to start)';
+  const common = {
     outDir: $('outDir').value,
     start: $('start').value,
     end: $('end').value,
     precise: document.querySelector('input[name=mode]:checked').value === 'precise',
-  });
+  };
+  const res = tab === 'file'
+    ? await api.cut({ input, ...common })
+    : await api.download({ url: $('url').value, quality: document.querySelector('input[name=quality]:checked').value, ...common });
   busy = false;
-  $('go').textContent = 'Cut';
+  $('tab-file').disabled = $('tab-url').disabled = false;
+  $('go').textContent = tab === 'file' ? 'Cut' : 'Download';
   $('bar').style.display = 'none';
   if (res.ok) {
     status.className = 'ok';
