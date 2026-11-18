@@ -1,16 +1,20 @@
 {
   "name": "ffmpeg-macos-cut",
-  "version": "1.0.0",
-  "description": "Cut a clip from a video between two timestamps using ffmpeg",
+  "version": "1.1.0",
+  "description": "Cut a clip from a video file or a YouTube link between two timestamps using ffmpeg and yt-dlp",
   "main": "main.js",
   "author": "Dzmitry Satsukevich",
   "license": "MIT",
   "scripts": {
+    "fetch-ytdlp": "node scripts/fetch-ytdlp.js",
+    "prestart": "node scripts/fetch-ytdlp.js",
     "start": "electron .",
+    "predist": "node scripts/fetch-ytdlp.js",
     "dist": "electron-builder --mac dmg --arm64 --publish never"
   },
   "dependencies": {
-    "ffmpeg-static": "^5.2.0"
+    "ffmpeg-static": "^5.2.0",
+    "ffprobe-static": "^3.1.0"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -19,8 +23,21 @@
   "build": {
     "appId": "com.dimamoving.ffmpegcut",
     "productName": "Video Cutter",
-    "asarUnpack": ["node_modules/ffmpeg-static/ffmpeg"],
-    "files": ["main.js", "preload.js", "index.html", "package.json"],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/ffmpeg",
+      "node_modules/ffprobe-static/bin/darwin/arm64/ffprobe"
+    ],
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "package.json",
+      "!node_modules/ffprobe-static/bin/{win32,linux}/**",
+      "!node_modules/ffprobe-static/bin/darwin/x64/**"
+    ],
+    "extraResources": [
+      { "from": "bin/yt-dlp_macos", "to": "yt-dlp" }
+    ],
     "mac": {
       "target": [{ "target": "dmg", "arch": ["arm64"] }],
       "category": "public.app-category.video"
